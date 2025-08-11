@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Add Transaction</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="max-w-3xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-xl font-semibold">Add Transaction</h1>
+      <a href="/" class="px-3 py-1 bg-gray-200 rounded">Back</a>
+    </header>
+
+    <form id="txForm" class="bg-white p-6 rounded-2xl shadow space-y-4">
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-sm">Date</label>
+          <input id="txDate" type="date" class="w-full border px-2 py-1 rounded" />
+        </div>
+        <div>
+          <label class="text-sm">Category</label>
+          <div class="flex">
+            <select id="categorySelect" class="flex-1 border px-2 py-1 rounded"></select>
+            <button id="addCatBtn" type="button" class="ml-2 px-3 py-1 rounded bg-gray-200">Add</button>
+          </div>
+        </div>
+        <div>
+          <label class="text-sm">Type</label>
+          <select id="txType" class="w-full border px-2 py-1 rounded">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <input id="txAmount" type="number" step="0.01" placeholder="Amount (₹)" class="border px-2 py-1 rounded" required />
+        <input id="txReason" type="text" placeholder="Reason / UPI ref" class="border px-2 py-1 rounded" />
+      </div>
+
+      <div class="flex justify-end">
+        <button id="submitTx" class="px-4 py-2 bg-indigo-600 text-white rounded">Add Transaction</button>
+      </div>
+    </form>
+  </div>
+
+<script>
+const API = '/api';
+async function fetchCategories(){
+  const r = await fetch(API + '/categories');
+  const data = await r.json();
+  const sel = document.getElementById('categorySelect');
+  sel.innerHTML = '<option value="">--choose--</option>';
+  data.forEach(c=>{
+    const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o);
+  });
+}
+document.getElementById('addCatBtn').addEventListener('click', async ()=>{
+  const name = prompt('New category name:');
+  if(!name) return;
+  await fetch(API + '/categories', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name}) });
+  await fetchCategories();
+});
+
+document.getElementById('txForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const date = document.getElementById('txDate').value || new Date().toISOString().slice(0,10);
+  const categoryId = document.getElementById('categorySelect').value;
+  const amount = document.getElementById('txAmount').value;
+  const type = document.getElementById('txType').value;
+  const reason = document.getElementById('txReason').value;
+  const payload = { date, amount, type, reason };
+  if(categoryId) payload.categoryId = categoryId;
+  else payload.categoryName = prompt('Enter category name:') || '';
+  await fetch(API + '/transactions', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  window.location.href = '/';
+});
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('txDate').value = new Date().toISOString().slice(0,10);
+  fetchCategories();
+});
+</script>
+</body>
+</html>

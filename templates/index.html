@@ -1,42 +1,124 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>Expense Tracker</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Expense Tracker — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body>
-    <div class="container">
-        <h1>💰 Expense Tracker</h1>
+<body class="bg-gray-100 text-gray-800">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-semibold">Expense Tracker</h1>
+      <div class="space-x-3">
+        <a href="/add.html" class="px-3 py-1 bg-indigo-600 text-white rounded">+ Add</a>
+        <a href="/monthly.html" class="px-3 py-1 bg-gray-200 rounded">Monthly Sheet</a>
+        <a href="/loans.html" class="px-3 py-1 bg-gray-200 rounded">Loans</a>
+      </div>
+    </header>
 
-        <form action="/add" method="POST">
-            <input type="text" name="description" placeholder="Description" required>
-            <input type="number" step="0.01" name="amount" placeholder="Amount" required>
-            <select name="category_id">
-                {% for category in categories %}
-                <option value="{{ category.id }}">{{ category.name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">Add Expense</button>
-        </form>
+    <section class="grid grid-cols-3 gap-6 mb-6">
+      <div class="col-span-2 bg-white p-5 rounded-2xl shadow">
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="text-sm text-gray-500">Remaining Budget</div>
+            <div id="remainingAmt" class="text-3xl font-bold">₹0</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-500">Total Spent (month)</div>
+            <div id="totalSpent" class="text-2xl font-semibold text-red-600">₹0</div>
+          </div>
+          <div>
+            <div class="text-sm text-gray-500">Total Income (month)</div>
+            <div id="totalIncome" class="text-2xl font-semibold text-green-600">₹0</div>
+          </div>
+        </div>
 
-        <table>
-            <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Amount</th>
-                <th>Category</th>
-                <th>Action</th>
-            </tr>
-            {% for expense in expenses %}
-            <tr>
-                <td>{{ expense.date.strftime('%Y-%m-%d') }}</td>
-                <td>{{ expense.description }}</td>
-                <td>₹{{ expense.amount }}</td>
-                <td>{{ expense.category.name }}</td>
-                <td><a href="/delete/{{ expense.id }}">❌</a></td>
-            </tr>
-            {% endfor %}
-        </table>
-    </div>
+        <div class="mt-6">
+          <label class="text-sm text-gray-600">Select month:</label>
+          <input id="monthPicker" type="month" class="ml-2 border px-2 py-1 rounded" />
+        </div>
+      </div>
+
+      <aside class="bg-white p-5 rounded-2xl shadow">
+        <h3 class="font-medium mb-3">Category Breakdown</h3>
+        <canvas id="pieChart" width="300" height="300"></canvas>
+        <div id="topCat" class="mt-4 text-sm text-gray-600"></div>
+        <div id="bottomCat" class="mt-1 text-sm text-gray-600"></div>
+      </aside>
+    </section>
+
+    <section class="bg-white p-6 rounded-2xl shadow">
+      <h2 class="text-lg font-medium mb-4">Transactions</h2>
+      <div id="txTable" class="overflow-auto max-h-80"></div>
+    </section>
+
+    <footer class="mt-6 text-center text-sm text-gray-500">© Personal Expense Tracker</footer>
+  </div>
+
+<script>
+const API = '/api';
+function inINR(x){ return '₹' + Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:2}); }
+
+async function fetchCategories(){
+  const r = await fetch(API + '/categories');
+  return await r.json();
+}
+
+async function loadDashboard(month){
+  const q = month ? '?month='+month : '';
+  const r = await fetch(API + '/dashboard' + q);
+  const d = await r.json();
+  document.getElementById('remainingAmt').textContent = inINR(d.remaining);
+  document.getElementById('totalSpent').textContent = inINR(d.totalSpent);
+  document.getElementById('totalIncome').textContent = inINR(d.totalIncome);
+
+  // pie chart
+  const ctx = document.getElementById('pieChart').getContext('2d');
+  const labels = d.breakdown.map(x=>x.category);
+  const data = d.breakdown.map(x=>x.amount);
+  if(window.myPie) window.myPie.destroy();
+  window.myPie = new Chart(ctx, { type:'pie', data:{ labels, datasets:[{ data }] }, options:{responsive:true} });
+
+  document.getElementById('topCat').textContent = d.topCategory ? 'Top: ' + d.topCategory.category + ' — ' + inINR(d.topCategory.amount) : '';
+  document.getElementById('bottomCat').textContent = d.bottomCategory ? 'Least: ' + d.bottomCategory.category + ' — ' + inINR(d.bottomCategory.amount) : '';
+}
+
+async function loadTransactions(month){
+  const q = month ? '?month='+month : '';
+  const r = await fetch(API + '/transactions' + q);
+  const txs = await r.json();
+  const wrap = document.getElementById('txTable');
+  if(!txs.length){ wrap.innerHTML = '<div class="text-sm text-gray-600">No transactions.</div>'; return; }
+  let html = '<table class="w-full text-sm"><thead class="text-left text-gray-700"><tr><th>Date</th><th>SL</th><th>Category</th><th>Type</th><th>Amount</th><th>Reason</th><th></th></tr></thead><tbody>';
+  txs.forEach(t=>{
+    html += `<tr class="border-t"><td class="py-2">${t.date}</td><td>${t.serial_no}</td><td>${t.category?t.category.name:''}</td><td>${t.type}</td><td class="${t.type==='expense'?'text-red-600':'text-green-600'} font-medium">${inINR(t.amount)}</td><td>${t.reason||''}</td><td><button data-id="${t.id}" class="delBtn text-red-500 text-sm">Delete</button></td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  document.querySelectorAll('.delBtn').forEach(b=>{
+    b.addEventListener('click', async e=>{
+      const id = e.target.dataset.id;
+      if(!confirm('Delete transaction?')) return;
+      await fetch(API + '/transactions/' + id, { method:'DELETE' });
+      refreshAll();
+    });
+  });
+}
+
+async function refreshAll(){
+  const month = document.getElementById('monthPicker').value || new Date().toISOString().slice(0,7);
+  await loadDashboard(month);
+  await loadTransactions(month);
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('monthPicker').value = new Date().toISOString().slice(0,7);
+  document.getElementById('monthPicker').addEventListener('change', refreshAll);
+  refreshAll();
+});
+</script>
 </body>
 </html>

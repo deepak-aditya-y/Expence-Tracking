@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Loans</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="max-w-4xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-xl font-semibold">Loans / Borrow</h1>
+      <a href="/" class="px-3 py-1 bg-gray-200 rounded">Back</a>
+    </header>
+
+    <div class="bg-white p-6 rounded-2xl shadow mb-6">
+      <form id="loanForm" class="grid grid-cols-3 gap-3">
+        <input id="person" placeholder="Person name" class="border px-2 py-1 rounded" required />
+        <input id="amount" type="number" step="0.01" placeholder="Amount" class="border px-2 py-1 rounded" required />
+        <select id="direction" class="border px-2 py-1 rounded">
+          <option value="they_owe">They owe me</option>
+          <option value="you_owe">I owe them</option>
+        </select>
+        <input id="place" placeholder="Place / reason" class="border px-2 py-1 rounded col-span-2" />
+        <div class="flex justify-end">
+          <button class="px-3 py-1 bg-indigo-600 text-white rounded">Add Loan</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow">
+      <h3 class="mb-3">Outstanding</h3>
+      <div id="outstanding"></div>
+    </div>
+  </div>
+
+<script>
+const API = '/api';
+function inINR(x){ return '₹' + Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:2}); }
+
+async function loadLoans(){
+  const r = await fetch(API + '/loans');
+  const arr = await r.json();
+  // compute net per person
+  const map = {};
+  arr.forEach(l=>{
+    const p = l.person;
+    const sign = l.direction === 'they_owe' ? 1 : -1; // they_owe => they owe you +, you_owe => you owe them -
+    map[p] = (map[p] || 0) + (sign * l.amount);
+  });
+  const wrap = document.getElementById('outstanding');
+  const keys = Object.keys(map);
+  if(!keys.length){ wrap.innerHTML = '<div class="text-sm text-gray-600">No loans recorded.</div>'; return; }
+  wrap.innerHTML = keys.map(k=>{
+    const v = map[k];
+    if(v>0) return `<div class="mb-2"><strong>${k}</strong>: ${inINR(v)} (they owe you)</div>`;
+    if(v<0) return `<div class="mb-2"><strong>${k}</strong>: ${inINR(-v)} (you owe)</div>`;
+    return `<div class="mb-2"><strong>${k}</strong>: Settled</div>`;
+  }).join('');
+}
+
+document.getElementById('loanForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const person = document.getElementById('person').value;
+  const amount = document.getElementById('amount').value;
+  const direction = document.getElementById('direction').value;
+  const place = document.getElementById('place').value;
+  await fetch(API + '/loans', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ person, amount, direction, place, date: new Date().toISOString().slice(0,10) }) });
+  document.getElementById('loanForm').reset();
+  loadLoans();
+});
+
+document.addEventListener('DOMContentLoaded', ()=> loadLoans());
+</script>
+</body>
+</html>

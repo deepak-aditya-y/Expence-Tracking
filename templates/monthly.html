@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Monthly Sheet</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="max-w-6xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-xl font-semibold">Monthly Sheet</h1>
+      <a href="/" class="px-3 py-1 bg-gray-200 rounded">Back</a>
+    </header>
+
+    <div class="bg-white p-6 rounded-2xl shadow mb-6">
+      <label class="text-sm">Select month:</label>
+      <input id="monthPicker" type="month" class="ml-2 border px-2 py-1 rounded" />
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow">
+      <div id="txTable"></div>
+    </div>
+  </div>
+
+<script>
+const API = '/api';
+function inINR(x){ return '₹' + Number(x||0).toLocaleString('en-IN',{maximumFractionDigits:2}); }
+
+async function loadTransactions(month){
+  const q = month ? '?month='+month : '';
+  const r = await fetch(API + '/transactions' + q);
+  const txs = await r.json();
+  const wrap = document.getElementById('txTable');
+  if(!txs.length){ wrap.innerHTML = '<div class="text-sm text-gray-600">No transactions this month.</div>'; return; }
+  let html = '<table class="w-full text-sm"><thead class="text-left text-gray-700"><tr><th>Date</th><th>SL</th><th>Category</th><th>Type</th><th>Amount</th><th>Reason</th><th>Action</th></tr></thead><tbody>';
+  txs.forEach(t=>{
+    html += `<tr class="border-t"><td class="py-2">${t.date}</td><td>${t.serial_no}</td><td>${t.category?t.category.name:''}</td><td>${t.type}</td><td class="${t.type==='expense'?'text-red-600':'text-green-600'} font-medium">${inINR(t.amount)}</td><td>${t.reason||''}</td><td><button data-id="${t.id}" class="delBtn text-red-500 text-sm">Delete</button></td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  document.querySelectorAll('.delBtn').forEach(b=>{
+    b.addEventListener('click', async e=>{
+      const id = e.target.dataset.id;
+      if(!confirm('Delete?')) return;
+      await fetch(API + '/transactions/' + id, { method:'DELETE' });
+      loadTransactions(document.getElementById('monthPicker').value);
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const m = new Date().toISOString().slice(0,7);
+  document.getElementById('monthPicker').value = m;
+  document.getElementById('monthPicker').addEventListener('change', ()=> loadTransactions(document.getElementById('monthPicker').value));
+  loadTransactions(m);
+});
+</script>
+</body>
+</html>
